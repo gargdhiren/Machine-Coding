@@ -1,0 +1,191 @@
+/*
+Pagination with Truncation - Requirements
+
+1. Fetch and display product list from API
+
+2. Show fixed number of items per page
+   Example: 10 items per page
+
+3. Show pagination controls:
+   - Previous button
+   - Next button
+   - Page number buttons
+
+4. Highlight current active page
+
+5. Clicking page number should:
+   - update current page
+   - update visible products
+
+6. Previous button should be disabled on first page
+
+7. Next button should be disabled on last page
+
+Truncation Requirements
+
+8. Always show:
+   - first page
+   - last page
+   - current page
+   - neighboring pages around current page
+
+9. Show ellipsis (...) for skipped page ranges
+
+   Example:
+   1 2 3 ... 10
+   1 ... 4 5 6 ... 10
+   1 ... 8 9 10
+
+10. Do not show multiple consecutive dots
+
+   Wrong:
+   1 . . . 5
+
+   Correct:
+   1 ... 5
+
+Edge Cases
+
+11. If total pages are small (<= 5),
+    show all pages without ellipsis
+
+12. Handle start boundary correctly
+
+   Example:
+   1 2 3 ... 10
+
+13. Handle end boundary correctly
+
+   Example:
+   1 ... 8 9 10
+
+14. Prevent page from going below first page
+    or above last page
+
+Code Quality Expectations
+
+15. Reusable Pagination component
+
+16. Proper React keys for mapped lists
+
+17. Loading state handling
+
+18. Error state handling
+
+19. Avoid unnecessary rerenders
+   (useMemo / optimization discussion)
+*/
+
+import { useState, useEffect, useMemo } from 'react';
+import './App.css';
+
+const Page = ({ products }) => {
+  return products.map((product) => {
+    return <div key={product.id}>{product.title}</div>;
+  });
+};
+
+const Pagination = ({ page, setPage, noOfPages }) => {
+  const nextPage = () => {
+    setPage((prev) => Math.min(prev + 1, noOfPages - 1));
+  };
+
+  const paginationArray = useMemo(() => {
+    let result = [];
+    for (let i = 0; i < noOfPages; i++) {
+      if (i == 0 || i == noOfPages - 1) {
+        result.push(i);
+      } else if (i > page - 2 && i < page + 2) {
+        result.push(i);
+      } else if (result[result.length - 1] !== '...') {
+        result.push('...');
+      }
+    }
+    return result;
+  }, [noOfPages, page]);
+
+  const prevPage = () => {
+    setPage((prev) => Math.max(0, prev - 1));
+  };
+
+  return (
+    <>
+      <button disabled={page === 0} onClick={prevPage}>
+        Prev
+      </button>
+      {paginationArray.map((i, index) =>
+        i !== '...' ? (
+          <button
+            className={page === i ? 'active' : ''}
+            onClick={() => setPage(i)}
+            key={index}
+          >
+            {i + 1}
+          </button>
+        ) : (
+          <span key={index}>{i}</span>
+        )
+      )}
+      <button disabled={page === noOfPages - 1} onClick={nextPage}>
+        Next
+      </button>
+    </>
+  );
+};
+
+function App() {
+  const [products, setProducts] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const NO_ITEMS = 10;
+  const noOfPages = Math.ceil(products.length / NO_ITEMS);
+  const startIndex = page * NO_ITEMS;
+  const endIndex = Math.min(startIndex + NO_ITEMS, products.length);
+
+  const fetchData = async (signal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('https://dummyjson.com/products?limit=500', {
+        signal: signal,
+      });
+      const data = await res.json();
+
+      setProducts(data.products);
+    } catch (error) {
+      if (error.name != 'AbortError') {
+        setError(error);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
+
+  return (
+    <>
+      <h1>Pagination</h1>
+      {loading ? (
+        <h1>Loading...</h1>
+      ) : error ? (
+        <h3>{error.message}</h3>
+      ) : (
+        <div>
+          <Pagination page={page} setPage={setPage} noOfPages={noOfPages} />
+          <Page products={products.slice(startIndex, endIndex)} />
+        </div>
+      )}
+    </>
+  );
+}
+
+export default App;
