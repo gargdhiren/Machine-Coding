@@ -1,0 +1,115 @@
+import { useState, useEffect, useRef } from 'react';
+import './App.css';
+
+const Product = ({ product }) => {
+  return (
+    <div className="product">
+      <img
+        className="product-image"
+        src={product.images[0]}
+        alt={product.title}
+      />
+      <div className="product-title">{product.title}</div>
+    </div>
+  );
+};
+
+const Page = ({ products }) => {
+  return (
+    <div className="products-container">
+      {products.map((product) => {
+        return <Product key={product.id} product={product} />;
+      })}
+    </div>
+  );
+};
+
+function App() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const loadingRef = useRef(false);
+  const skipRef = useRef(0);
+  const timeoutRef = useRef(null);
+  const throttleScrollRef = useRef(false);
+  const [error, setError] = useState(null);
+  const controllerRef = useRef(null);
+  const productsLengthRef = useRef(0);
+  const totalProductsRef = useRef(100);
+
+  const fetchData = async () => {
+    if (
+      loadingRef.current ||
+      productsLengthRef.current > totalProductsRef.current
+    )
+      return;
+
+    const controller = new AbortController();
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+    }
+    controllerRef.current = controller;
+
+    loadingRef.current = true;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `https://dummyjson.com/products?limit=20&skip=${skipRef.current}`,
+        {
+          signal: controller.signal,
+        }
+      );
+      const data = await res.json();
+      productsLengthRef.current += data.products.length;
+      setProducts((prev) => [...prev, ...data.products]);
+      skipRef.current += 20;
+      totalProductsRef.current = data.total;
+    } catch (error) {
+      if (error.name != 'AbortError') {
+        setError(error);
+      }
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    const handleScroll = () => {
+      if (
+        window.innerHeight + window.scrollY >=
+        document.body.offsetHeight - 200
+      ) {
+        if (throttleScrollRef.current) return;
+
+        fetchData();
+
+        throttleScrollRef.current = true;
+
+        timeoutRef.current = setTimeout(() => {
+          throttleScrollRef.current = false;
+        }, 500);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (controllerRef.current) controllerRef.current.abort();
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      loadingRef.current = false;
+    };
+  }, []);
+  return (
+    <>
+      <h1>Infinite Scroll</h1>
+      <Page products={products} />
+      {loading ? <h1>Loading</h1> : error ? <h1>{error.message}</h1> : <></>}
+    </>
+  );
+}
+
+export default App;
